@@ -113,21 +113,10 @@ class ImportManager {
 
   async analyzeUsage() {
     const usedPackages = new Set();
+    const unusedPackages = new Set();
     const allFiles = [];
     
     // Récupérer tous les fichiers à analyser
-    const files = fs.readdirSync(this.projectPath)
-      .filter(file => {
-        const ext = path.extname(file);
-        return this.config.watcherConfig.fileExtensions.includes(ext);
-      })
-      .filter(file => !this.shouldIgnoreFile(file));
-
-    if (this.config.debug) {
-      console.log('📁 Scanning files:', files.length);
-    }
-
-    // Analyser récursivement les sous-dossiers
     const scanDirectory = (dir) => {
       const entries = fs.readdirSync(dir);
       entries.forEach(entry => {
@@ -148,13 +137,29 @@ class ImportManager {
     // Scanner le projet en entier
     scanDirectory(this.projectPath);
 
+    if (this.config.debug) {
+      console.log('🔄 Analyzing dependencies...');
+      console.log(`📁 Scanning files: ${allFiles.length}`);
+    }
+
     // Analyser chaque fichier
     for (const file of allFiles) {
       try {
         const content = fs.readFileSync(path.join(this.projectPath, file), 'utf8');
-        this.analyzeFileContent(content, usedPackages);
+        this.analyzeFileContent(content, usedPackages, unusedPackages);
       } catch (error) {
         console.error(`❌ Error in ${file}:`, error);
+      }
+    }
+
+    // Afficher le rapport global une seule fois
+    if (this.config.debug && (usedPackages.size > 0 || unusedPackages.size > 0)) {
+      console.log('\n📊 Dependencies status:');
+      if (usedPackages.size > 0) {
+        console.log(`  ✅ ${usedPackages.size} used: ${Array.from(usedPackages).join(', ')}`);
+      }
+      if (unusedPackages.size > 0) {
+        console.log(`  ⚠️  ${unusedPackages.size} unused: ${Array.from(unusedPackages).join(', ')}`);
       }
     }
 
@@ -162,17 +167,35 @@ class ImportManager {
   }
 
   shouldIgnoreFile(file) {
-    // Ignorer les fichiers du package lui-même
-    const selfPackageFiles = [
-      'importManager.js',
-      'index.js',
-      'watcher-importmanager.js',
-      'import-manager.config.js',
-      'bin/cli.js',
-      'bin/install.js'
+    // Packages natifs de Node à ignorer
+    const nativeModules = [
+      'fs',
+      'path',
+      'child_process',
+      'util',
+      'readline',
+      '@babel'
     ];
 
-    if (selfPackageFiles.includes(file)) {
+    // Ignorer les fichiers du package lui-même
+    const selfPackageFiles = [
+      'src/core/importManager.js',
+      'src/index.js',
+      'src/bin/cli.js',
+      'src/bin/install.js',
+      'src/config/import-manager.config.js',
+      'watcher-importmanager.js',
+      'node_modules/@babel',
+      'node_modules/chokidar'
+    ];
+
+    // Vérifier si c'est un module natif
+    if (nativeModules.includes(file)) {
+      return true;
+    }
+
+    // Vérifier si c'est un fichier du package
+    if (selfPackageFiles.some(pattern => file.includes(pattern))) {
       return true;
     }
 
@@ -183,7 +206,60 @@ class ImportManager {
     });
   }
 
-  analyzeFileContent(content, usedPackages) {
+  analyzeFileContent(content, usedPackages, unusedPackages) {
+    const internalDependencies = [
+      '@babel',
+      '@babel/parser',
+      '@babel/traverse',
+      '@babel/core',
+      'chokidar',
+      'fs',
+      'path',
+      'child_process',
+      'util',
+      'readline',
+      'typescript',
+      'autoremover-import'
+    ];
+
+    const isNpmPackage = (source) => {
+      if (!source) return false;
+      
+      // Ignorer tous les chemins relatifs et absolus
+      if (source.startsWith('.') || 
+          source.startsWith('/') || 
+          source.startsWith('..') || 
+          /^[a-zA-Z]:\\/.test(source)) {
+        return false;
+      }
+
+      // Vérifier si c'est un package npm valide
+      const packageName = source.split('/')[0];
+      
+      // Gestion des packages scoped (@org/package)
+      if (packageName.startsWith('@')) {
+        const parts = packageName.split('/');
+        return parts.length === 2 && /^@[a-z0-9-~][a-z0-9-._~]*\/[a-z0-9-~][a-z0-9-._~]*$/.test(packageName);
+      }
+      
+      // Packages standards
+      return /^[a-z0-9-~][a-z0-9-._~]*$/.test(packageName);
+    };
+
+    const shouldAnalyzeImport = (source) => {
+      // Vérifier d'abord si c'est un package npm
+     if (!isNpmPackage(source)) {
+        return false;
+      } 
+
+      // Vérifier si c'est un package interne à ignorer
+      const packageName = source.split('/')[0];
+      const shouldIgnore = internalDependencies.some(dep => 
+        packageName === dep || packageName.startsWith(`${dep}/`)
+      );
+      return !shouldIgnore;
+    };
+
     try {
       const ast = parser.parse(content, {
         sourceType: 'module',
@@ -195,32 +271,24 @@ class ImportManager {
 
       const addImport = (packageName, localName) => {
         if (!imports.has(packageName)) {
-          imports.set(packageName, []);
+          imports.set(packageName, new Set());
         }
-        imports.get(packageName).push({
-          name: localName,
-          used: false,
-          usageCount: 0
-        });
+        imports.get(packageName).add(localName);
       };
 
       const checkUsage = (name) => {
-        imports.forEach((specifiers, packageName) => {
-          specifiers.forEach(spec => {
-            if (spec.name === name) {
-              spec.used = true;
-              spec.usageCount++;
-              usedPackages.add(packageName);
-            }
-          });
+        imports.forEach((localNames, packageName) => {
+          if (localNames.has(name)) {
+            usedPackages.add(packageName);
+            unusedPackages.delete(packageName);
+          }
         });
       };
 
       traverse(ast, {
-        // Support pour ES6 imports
         ImportDeclaration(path) {
           const source = path.node.source.value;
-          if (!source.startsWith('.') && !source.startsWith('/')) {
+          if (shouldAnalyzeImport(source)) {
             const packageName = source.split('/')[0];
             path.node.specifiers.forEach(spec => {
               addImport(packageName, spec.local.name);
@@ -228,28 +296,21 @@ class ImportManager {
           }
         },
 
-        // Support pour require()
-        VariableDeclarator(path) {
-          if (path.node.init && 
-              path.node.init.type === 'CallExpression' && 
-              path.node.init.callee.name === 'require') {
-            
-            const args = path.node.init.arguments;
+        CallExpression(path) {
+          if (path.node.callee.name === 'require') {
+            const args = path.node.arguments;
             if (args.length > 0 && args[0].type === 'StringLiteral') {
               const source = args[0].value;
-              if (!source.startsWith('.') && !source.startsWith('/')) {
+              if (shouldAnalyzeImport(source)) {
                 const packageName = source.split('/')[0];
-                
-                // Gérer différents cas de require
-                if (path.node.id.type === 'Identifier') {
-                  // const axios = require('axios')
-                  addImport(packageName, path.node.id.name);
-                } 
-                else if (path.node.id.type === 'ObjectPattern') {
-                  // const { get, post } = require('axios')
-                  path.node.id.properties.forEach(prop => {
-                    addImport(packageName, prop.value.name);
-                  });
+                if (path.parent.type === 'VariableDeclarator') {
+                  if (path.parent.id.type === 'Identifier') {
+                    addImport(packageName, path.parent.id.name);
+                  } else if (path.parent.id.type === 'ObjectPattern') {
+                    path.parent.id.properties.forEach(prop => {
+                      addImport(packageName, prop.value.name);
+                    });
+                  }
                 }
               }
             }
@@ -260,28 +321,16 @@ class ImportManager {
           hasJSX = true;
         },
 
-        JSXOpeningElement(path) {
-          if (path.node.name && path.node.name.name) {
-            checkUsage(path.node.name.name);
-          }
-        },
-
-        TaggedTemplateExpression(path) {
-          if (path.node.tag.type === 'MemberExpression' && 
-              path.node.tag.object.name === 'styled') {
-            usedPackages.add('styled-components');
-          }
-        },
-
         MemberExpression(path) {
-          if (path.node.object.name) {
+          if (path.node.object.type === 'Identifier') {
             checkUsage(path.node.object.name);
           }
         },
 
         Identifier(path) {
           if (!path.parent.type.includes('Import') && 
-              !path.parent.type.includes('VariableDeclarator')) {
+              !path.parent.type.includes('VariableDeclarator') &&
+              path.parent.type !== 'MemberExpression') {
             checkUsage(path.node.name);
           }
         }
@@ -291,30 +340,19 @@ class ImportManager {
         usedPackages.add('react');
       }
 
-      // Collecter les statistiques d'utilisation
-      const usedImports = new Set();
-      const unusedImports = new Set();
-
-      imports.forEach((specifiers, packageName) => {
-        if (specifiers.some(spec => spec.used)) {
-          usedImports.add(packageName);
-        } else {
-          unusedImports.add(packageName);
+      // Mettre à jour les packages inutilisés
+      imports.forEach((localNames, packageName) => {
+        if (!usedPackages.has(packageName)) {
+          unusedPackages.add(packageName);
         }
       });
 
-      if (this.config.debug && (usedImports.size > 0 || unusedImports.size > 0)) {
-        console.log('\n📊 Dependencies status:');
-        if (usedImports.size > 0) {
-          console.log(`  ✅ ${usedImports.size} used: ${Array.from(usedImports).join(', ')}`);
-        }
-        if (unusedImports.size > 0) {
-          console.log(`  ⚠️  ${unusedImports.size} unused: ${Array.from(unusedImports).join(', ')}`);
-        }
-      }
-
     } catch (error) {
-      console.error('❌ Error parsing file:', error);
+      if (error.code === 'BABEL_PARSER_SYNTAX_ERROR') {
+        console.error('❌ Error parsing file:', error.message);
+      } else {
+        console.error('❌ Error analyzing imports:', error);
+      }
     }
   }
 
@@ -345,14 +383,23 @@ class ImportManager {
         ? (packageJson.devDependencies || {})
         : {};
 
-      // Protection du package lui-même
-      const PROTECTED_PACKAGE = 'autoremover-import';
+      // Protection du package lui-même et des packages spéciaux
+      const PROTECTED_PACKAGES = [
+        'autoremover-import',
+        '@babel',
+        '@babel/core',
+        '@babel/parser',
+        '@babel/traverse',
+        'chokidar',
+        'typescript'
+      ];
 
       const toInstall = Array.from(usedPackages)
         .filter(pkg => 
           !currentDeps[pkg] && 
           !devDeps[pkg] && 
-          !this.config.ignoredPackages.includes(pkg)
+          !this.config.ignoredPackages.includes(pkg) &&
+          !PROTECTED_PACKAGES.some(protectedPkg => pkg.startsWith(protectedPkg))
         );
 
       const toRemove = Object.keys(currentDeps)
@@ -360,9 +407,10 @@ class ImportManager {
           !usedPackages.has(pkg) && 
           !devDeps[pkg] && 
           !this.config.ignoredPackages.includes(pkg) &&
-          pkg !== PROTECTED_PACKAGE
+          !PROTECTED_PACKAGES.some(protectedPkg => pkg.startsWith(protectedPkg))
         );
 
+      // Afficher un résumé des changements
       if (toInstall.length > 0 || toRemove.length > 0) {
         console.log('\n📦 Dependencies changes:');
         if (toInstall.length > 0) console.log(`  + Adding: ${toInstall.join(', ')}`);
@@ -387,38 +435,36 @@ class ImportManager {
             cwd: this.projectPath,
             stdio: 'inherit'
           });
-          console.log(`✅ ${pkg} installed successfully`);
         } catch (error) {
           console.error(`❌ Failed to install ${pkg}:`, error.message);
         }
       }
 
-      // Suppression des packages
-      for (const pkg of toRemove) {
+      // Suppression des packages en une seule commande
+      if (toRemove.length > 0) {
         try {
-          if (pkg === PROTECTED_PACKAGE) {
-            console.warn('⚠️ Attempted to remove protected package autoremover-import - Operation blocked');
-            continue;
-          }
-
           if (this.config.packageJsonConfig.safeMode) {
             const shouldRemove = await this.confirmAction(
-              `\n🤔 Do you want to remove ${pkg}?`
+              `\n🤔 Do you want to remove these packages: ${toRemove.join(', ')}?`
             );
             if (!shouldRemove) {
-              console.log(`⏭️  Skipping removal of ${pkg}`);
-              continue;
+              console.log('⏭️  Skipping removal of packages');
+              return;
             }
           }
 
-          console.log(`\n🗑️  Removing ${pkg}...`);
-          await execAsync(this.getUninstallCommand(pkg), { 
+          console.log('\n🗑️  Removing packages...');
+          const command = this.config.packageJsonConfig.packageManager === 'yarn'
+            ? `yarn remove ${toRemove.join(' ')}`
+            : `npm uninstall ${toRemove.join(' ')}`;
+
+          await execAsync(command, { 
             cwd: this.projectPath,
             stdio: 'inherit'
           });
-          console.log(`✅ ${pkg} removed successfully`);
+          console.log('✅ Packages removed successfully');
         } catch (error) {
-          console.error(`❌ Failed to remove ${pkg}:`, error.message);
+          console.error('❌ Failed to remove packages:', error.message);
         }
       }
 
