@@ -17,7 +17,7 @@ function setupProject() {
         const configPath = path.join(parentPath, 'import-manager.config.js');
         
         // Watcher file path
-        const watcherPath = path.join(parentPath, 'watcher.js');
+        const watcherPath = path.join(parentPath, 'watcher-importmanager.js');
         
         // Add script to parent package.json
         if (fs.existsSync(parentPackageJsonPath)) {
@@ -28,7 +28,7 @@ function setupProject() {
             }
             
             // Add required scripts
-            packageJson.scripts['watch-imports'] = 'node watcher.js';
+            packageJson.scripts['watch-imports'] = 'node watcher-importmanager.js';
             packageJson.scripts['watch-dev'] = 'npm run watch-imports';
             
             fs.writeFileSync(parentPackageJsonPath, JSON.stringify(packageJson, null, 2));
@@ -37,7 +37,7 @@ function setupProject() {
         
         // Copy configuration file
         if (!fs.existsSync(configPath)) {
-            const defaultConfig = path.join(__dirname, '../import-manager.config.js');
+            const defaultConfig = path.join(__dirname, '../config/import-manager.config.js');
             fs.copyFileSync(defaultConfig, configPath);
             console.log('✅ Configuration file created');
         }
@@ -58,7 +58,7 @@ console.log('✨ Import watching enabled');
 `;
         
         fs.writeFileSync(watcherPath, watcherContent);
-        console.log('✅ Watcher.js file created');
+        console.log('✅ Watcher file created');
         
         console.log('\n✅ Installation completed successfully!');
         console.log('\nTo start watching imports:');

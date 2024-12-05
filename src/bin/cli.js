@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const ImportManager = require('../importManager');
+const ImportManager = require('../core/importManager');
 const path = require('path');
 const fs = require('fs');
 
@@ -14,20 +14,14 @@ function addScriptToPackageJson() {
     if (fs.existsSync(packageJsonPath)) {
         const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
         
-        // Add script if it doesn't exist
         if (!packageJson.scripts) {
             packageJson.scripts = {};
         }
         
         if (!packageJson.scripts['watch-imports']) {
             packageJson.scripts['watch-imports'] = 'autorem';
-            
-            // Write changes to package.json
-            fs.writeFileSync(
-                packageJsonPath,
-                JSON.stringify(packageJson, null, 2)
-            );
-            console.log('Script "watch-imports" added to package.json');
+            fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2));
+            console.log('✅ Script "watch-imports" added to package.json');
         }
     }
 }
@@ -37,9 +31,9 @@ function createConfigFile() {
     const configPath = path.join(userProjectPath, 'import-manager.config.js');
     
     if (!fs.existsSync(configPath)) {
-        const defaultConfig = path.join(__dirname, '../import-manager.config.js');
+        const defaultConfig = path.join(__dirname, '../config/import-manager.config.js');
         fs.copyFileSync(defaultConfig, configPath);
-        console.log('Configuration file created');
+        console.log('✅ Configuration file created');
     }
 }
 
@@ -48,9 +42,9 @@ async function init() {
     try {
         addScriptToPackageJson();
         createConfigFile();
-        console.log('Installation completed successfully');
+        console.log('✅ Installation completed successfully');
     } catch (error) {
-        console.error('Error during installation:', error);
+        console.error('❌ Error during installation:', error);
         process.exit(1);
     }
 }
@@ -65,17 +59,13 @@ async function main() {
     }
 
     try {
-        // Start the import manager
         const manager = new ImportManager(userProjectPath);
         await manager.start();
-        
-        console.log('Import manager started successfully');
-        
+        console.log('✨ Import manager started successfully');
     } catch (error) {
-        console.error('Error during initialization:', error);
+        console.error('❌ Error during initialization:', error);
         process.exit(1);
     }
 }
 
-// Execute the program
 main(); 
