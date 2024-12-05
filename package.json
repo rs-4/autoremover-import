@@ -9,8 +9,6 @@
   },
   "scripts": {
     "dev": "node src/index.js",
-    "build": "tsc",
-    "prepare": "husky install && npm run build",
     "watch-imports": "node dist/bin/cli.js",
     "postinstall": "node dist/bin/install.js",
     "lint": "eslint src/**/*.js",
