@@ -5,12 +5,12 @@
   "main": "dist/core/importManager.js",
   "types": "dist/core/importManager.d.ts",
   "bin": {
-    "autoremover-import": "./dist/bin/cli.js"
+    "autoremover-import": "./src/bin/cli.js"
   },
   "scripts": {
     "dev": "node src/index.js",
-    "watch-imports": "node dist/bin/cli.js",
-    "postinstall": "node dist/bin/install.js",
+    "watch-imports": "node src/bin/cli.js",
+    "postinstall": "node src/bin/install.js",
     "lint": "eslint src/**/*.js",
     "lint:fix": "eslint src/**/*.js --fix",
     "format": "prettier --write \"src/**/*.{js,jsx,ts,tsx,json,md}\"",
