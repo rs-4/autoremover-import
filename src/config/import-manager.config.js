@@ -4,7 +4,8 @@ module.exports = {
     'react',
     'react-dom',
     'fs',
-    'autoremover-import'
+    'autoremover-import',
+    '@babel'
   ],
 
   watcherConfig: {
