@@ -1,7 +1,29 @@
+# Dependencies
 node_modules/
+package-lock.json
+
+# Build
 dist/
 build/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+logs
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# OS
 .DS_Store
-coverage/
-.env 
+Thumbs.db 

@@ -2,16 +2,22 @@
   "name": "autoremover-import",
   "version": "1.0.9",
   "description": "remove and auto import package json for javascript",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "dist/core/importManager.js",
+  "types": "dist/core/importManager.d.ts",
   "bin": {
     "autoremover-import": "./dist/bin/cli.js"
   },
   "scripts": {
+    "dev": "node src/index.js",
     "build": "tsc",
-    "prepare": "npm run build",
+    "prepare": "husky install && npm run build",
     "watch-imports": "node dist/bin/cli.js",
-    "postinstall": "node dist/bin/install.js"
+    "postinstall": "node dist/bin/install.js",
+    "lint": "eslint src/**/*.js",
+    "lint:fix": "eslint src/**/*.js --fix",
+    "format": "prettier --write \"src/**/*.{js,jsx,ts,tsx,json,md}\"",
+    "test": "echo \"No tests specified\" && exit 0",
+    "commit": "git-cz"
   },
   "keywords": [
     "import",
@@ -22,21 +28,28 @@
     "react"
   ],
   "author": {
-    "name": "Votre Nom",
-    "email": "votre@email.com"
+    "name": "rs12"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/votre-username/autoremover-import.git"
+    "url": "git+https://github.com/rs-4/autoremover-import"
   },
-  "license": "ISC",
+  "license": "MIT",
   "devDependencies": {
+    "@commitlint/cli": "^19.6.0",
+    "@commitlint/config-conventional": "^19.6.0",
     "@types/babel__core": "^7.20.5",
     "@types/babel__parser": "^7.1.5",
-    "@types/babel__traverse": "^7.20.6"
+    "@types/babel__traverse": "^7.20.6",
+    "eslint": "^8.50.0",
+    "eslint-config-prettier": "^9.0.0",
+    "eslint-plugin-prettier": "^5.0.0",
+    "husky": "^8.0.0",
+    "prettier": "^3.0.0"
   },
   "dependencies": {
-    "@types/react": "^18.3.14",
-    "styled-components": "^6.1.13"
+    "axios": "^1.7.9",
+    "fs": "^0.0.1-security",
+    "typescript": "^5.7.2"
   }
 }

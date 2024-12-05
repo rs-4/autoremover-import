@@ -1,6 +1,10 @@
 module.exports = {
-  essentialPackages: [
-    'typescript'
+  ignoredPackages: [
+    'typescript',
+    'react',
+    'react-dom',
+    'fs',
+    'autoremover-import'
   ],
 
   watcherConfig: {
@@ -13,15 +17,16 @@ module.exports = {
       '.next',
       '*.test.*',
       'package.json',
-      'package-lock.json'
+      'package-lock.json',
+      '.git'
     ],
     fileExtensions: ['.js', '.jsx', '.ts', '.tsx']
   },
-
   packageJsonConfig: {
     checkDevDependencies: false,
-    defaultVersion: 'latest'
+    defaultVersion: 'latest',
+    safeMode: false,
+    packageManager: 'npm'
   },
-
   debug: true
 };
