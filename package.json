@@ -1,6 +1,6 @@
 {
   "name": "autoremover-import",
-  "version": "1.0.9",
+  "version": "1.1.0",
   "description": "remove and auto import package json for javascript",
   "main": "dist/core/importManager.js",
   "types": "dist/core/importManager.d.ts",
